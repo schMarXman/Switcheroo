@@ -22,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
@@ -31,10 +32,13 @@ using System.Windows.Controls;
 using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using System.Xml.Serialization;
 using ManagedWinapi;
 using ManagedWinapi.Windows;
+using Microsoft.Win32;
 using Switcheroo.Core;
 using Switcheroo.Core.Matchers;
 using Switcheroo.Properties;
@@ -61,6 +65,8 @@ namespace Switcheroo
         private AltTabHook _altTabHook;
         private SystemWindow _foregroundWindow;
         private bool _altTabAutoSwitch;
+        private string _activeTheme = string.Empty;
+        private OptionsWindow.ThemeMode _activeThemeMode = OptionsWindow.ThemeMode.CustomTheme;
 
         public MainWindow()
         {
@@ -84,6 +90,127 @@ namespace Switcheroo
         #region Private Methods
 
         /// =================================
+
+        private void SetTheme()
+        {
+            var themesDirectory = Directory.CreateDirectory(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Themes"));
+
+            var settingsThemeMode = (OptionsWindow.ThemeMode)Enum.Parse(typeof(OptionsWindow.ThemeMode), Settings.Default.ThemeMode);
+
+            if (_activeThemeMode == OptionsWindow.ThemeMode.SystemDefault || _activeThemeMode != settingsThemeMode || !_activeTheme.Equals(Settings.Default.CustomTheme))
+            {
+                _activeThemeMode = settingsThemeMode;
+                _activeTheme = Settings.Default.CustomTheme;
+
+                Theme t = null;
+
+                switch (_activeThemeMode)
+                {
+                    case OptionsWindow.ThemeMode.SystemDefault:
+                        // Set _activeTheme to something else, so windows settings are checked every time the window is opened.
+                        _activeTheme = "";
+                        bool isLightMode = false;
+                        try
+                        {
+                            isLightMode = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", null) as int? == 1 ? true : false;
+                        }
+                        catch (Exception)
+                        {
+                            MessageBox.Show($"Error reading windows theme settings. Using dark theme.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
+                        t = isLightMode ? Theme.GetDefaultLightTheme() : Theme.GetDefaultDarkTheme();
+                        break;
+                    case OptionsWindow.ThemeMode.DefaultDark:
+                        t = Theme.GetDefaultDarkTheme();
+                        break;
+                    case OptionsWindow.ThemeMode.DefaultLight:
+                        t = Theme.GetDefaultLightTheme();
+                        break;
+                    case OptionsWindow.ThemeMode.CustomTheme:
+                        string themeFile = Path.Combine(themesDirectory.FullName, _activeTheme);
+                        bool errorLoadingTheme = false;
+                        //try
+                        //{
+                        //    themeFile = Directory.GetFiles(themesDirectory.FullName, "*.stheme").Where(x => Path.GetFileNameWithoutExtension(x).Equals(_activeTheme)).FirstOrDefault();
+                        //}
+                        //catch (Exception)
+                        //{
+                        //    MessageBox.Show($"Error reading themes directory \"{themesDirectory}\". Using system default.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        //    errorLoadingTheme = true;
+                        //}
+                        if (File.Exists(themeFile))
+                        {
+                            try
+                            {
+                                XmlSerializer serializer = new XmlSerializer(typeof(Theme));
+                                using (var fs = new FileStream(themeFile, FileMode.Open))
+                                {
+                                    t = serializer.Deserialize(fs) as Theme;
+                                }
+                            }
+                            catch (Exception)
+                            {
+                                MessageBox.Show($"Error reading theme \"{_activeTheme}\". Using system default.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                                errorLoadingTheme = true;
+                            }
+                        }
+                        else
+                        {
+                            MessageBox.Show($"Could not find theme \"{_activeTheme}\". Using system default.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                            errorLoadingTheme = true;
+                        }
+
+                        if (errorLoadingTheme)
+                        {
+                            Settings.Default.ThemeMode = OptionsWindow.ThemeMode.SystemDefault.ToString();
+                            Settings.Default.CustomTheme = string.Empty;
+                            Settings.Default.Save();
+                            SetTheme();
+                            return;
+                        }
+                        break;
+                    default:
+                        // Unknown theme mode
+                        throw new Exception("Unkown theme mode found while trying to set theme.");
+                        break;
+                }
+
+                // apply colors
+                Resources["ProcessItemFontColor"] = ColorConverter.ConvertFromString(t.ProcessItemFontColor);
+                Resources["ProcessItemFadeOutColor"] = ColorConverter.ConvertFromString(t.ProcessItemFadeOutColor);
+                Resources["ProcessItemClosingColor"] = ColorConverter.ConvertFromString(t.ProcessItemClosingColor);
+                lb.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.ProcessItemBackgroundColor));
+
+                tb.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.SearchBoxFontColor));
+                tb.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.SearchBoxBackgroundColor));
+                tb.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.SearchBoxBorderColor));
+                tb.SelectionBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.SearchBoxTextSelectionColor));
+
+                Border.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.ProcessListBackgroundColor));
+                Border.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.ProcessListBorderColor));
+
+                SearchHelpLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.SearchHelpLabelFontColor));
+                NavigationHelpLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.NavigationHelpLabelFontColor));
+                FocusWindowHelpLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.FocusWindowHelpLabelFontColor));
+                CloseWindowHelpLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.CloseWindowHelpLabelFontColor));
+                DismissHelpLabel.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.DismissHelpLabelFontColor));
+
+                // test
+                XmlSerializer xml = new XmlSerializer(typeof(Theme));
+                Directory.CreateDirectory("c:\\test");
+                using (var fs = new FileStream("C:\\test\\bla.xml", FileMode.Create))
+                {
+                    xml.Serialize(fs, t);
+                }
+
+                using (var fs = new FileStream("C:\\test\\bla.xml", FileMode.Open))
+                {
+                    t = xml.Deserialize(fs) as Theme;
+                }
+
+            }
+
+        }
 
         private void SetUpKeyBindings()
         {
@@ -268,7 +395,7 @@ namespace Switcheroo
             var firstWindow = _unfilteredWindowList.FirstOrDefault();
 
             var foregroundWindowMovedToBottom = false;
-            
+
             // Move first window to the bottom of the list if it's related to the foreground window
             if (firstWindow != null && AreWindowsRelated(firstWindow.AppWindow, _foregroundWindow))
             {
@@ -282,9 +409,9 @@ namespace Switcheroo
 
             foreach (var window in _unfilteredWindowList)
             {
-                window.FormattedTitle = new XamlHighlighter().Highlight(new[] {new StringPart(window.AppWindow.Title)});
+                window.FormattedTitle = new XamlHighlighter().Highlight(new[] { new StringPart(window.AppWindow.Title) });
                 window.FormattedProcessTitle =
-                    new XamlHighlighter().Highlight(new[] {new StringPart(window.AppWindow.ProcessTitle)});
+                    new XamlHighlighter().Highlight(new[] { new StringPart(window.AppWindow.ProcessTitle) });
             }
 
             lb.DataContext = null;
@@ -333,9 +460,37 @@ namespace Switcheroo
             SizeToContent = SizeToContent.Manual;
             SizeToContent = SizeToContent.WidthAndHeight;
 
+            // Decide which screen the window will be displayed on
+            Screen screen;
+            switch ((OptionsWindow.DisplayBehaviour)Enum.Parse(typeof(OptionsWindow.DisplayBehaviour), Settings.Default.DisplayBehaviour, true))
+            {
+                case OptionsWindow.DisplayBehaviour.FollowCursor:
+                    screen = Screen.FromPoint(System.Windows.Forms.Cursor.Position);
+                    break;
+                case OptionsWindow.DisplayBehaviour.PrimaryScreen:
+                    screen = Screen.PrimaryScreen;
+                    break;
+                case OptionsWindow.DisplayBehaviour.CustomScreen:
+                    try
+                    {
+                        screen = Screen.AllScreens[Settings.Default.ScreenIndex];
+                    }
+                    catch (Exception)
+                    {
+                        MessageBox.Show($"Screen with index \"{Settings.Default.ScreenIndex}\" does not exist. Using \"follow cursor\" behaviour.", "Screen not found", MessageBoxButton.OK, MessageBoxImage.Error);
+                        screen = Screen.FromPoint(System.Windows.Forms.Cursor.Position);
+                    }
+                    break;
+                default:
+                    // some error occured
+                    return;
+                    break;
+            }
+
             // Position the window in the center of the screen
-            Left = (SystemParameters.PrimaryScreenWidth/2) - (ActualWidth/2);
-            Top = (SystemParameters.PrimaryScreenHeight/2) - (ActualHeight/2);
+            Left = screen.Bounds.X + ((screen.Bounds.Width - ActualWidth) / 2)/* + horizontalShift*/;
+            Top = screen.Bounds.Y + ((screen.Bounds.Height - ActualHeight) / 2) /*+ verticalShift*/;
+
         }
 
         /// <summary>
@@ -447,6 +602,8 @@ namespace Switcheroo
             {
                 tb.IsEnabled = true;
 
+                SetTheme();
+
                 _foregroundWindow = SystemWindow.ForegroundWindow;
                 Show();
                 Activate();
@@ -537,6 +694,8 @@ namespace Switcheroo
                 altKeyPressed = true;
             }
 
+            SetTheme();
+
             // Bring the Switcheroo window to the foreground
             Show();
             SystemWindow.ForegroundWindow = thisWindow;
@@ -606,7 +765,7 @@ namespace Switcheroo
             foreach (var win in windows)
             {
                 bool isClosed = await _windowCloser.TryCloseAsync(win);
-                if(isClosed)
+                if (isClosed)
                     RemoveWindow(win);
             }
 

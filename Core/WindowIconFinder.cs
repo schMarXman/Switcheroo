@@ -58,7 +58,10 @@ namespace Switcheroo.Core
                 else
                 {
                     var executablePath = window.ExecutablePath;
-                    icon = Icon.ExtractAssociatedIcon(executablePath);
+                    if (!(new Uri(executablePath).IsUnc))
+                    {
+                        icon = Icon.ExtractAssociatedIcon(executablePath);
+                    }
                 }
             }
             catch (Win32Exception)

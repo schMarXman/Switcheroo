@@ -32,5 +32,17 @@
     <Setting Name="EnableHotKey" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">True</Value>
     </Setting>
+    <Setting Name="ThemeMode" Type="System.String" Scope="User">
+      <Value Profile="(Default)">SystemDefault</Value>
+    </Setting>
+    <Setting Name="DisplayBehaviour" Type="System.String" Scope="User">
+      <Value Profile="(Default)">FollowCursor</Value>
+    </Setting>
+    <Setting Name="ScreenIndex" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">0</Value>
+    </Setting>
+    <Setting Name="CustomTheme" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
   </Settings>
 </SettingsFile>

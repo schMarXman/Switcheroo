@@ -32,34 +32,37 @@
     <Window.Resources>
         <local:WindowHandleToIconConverter x:Key="WindowHandleToIconConverter" />
         <local:WindowHandleToCachedIconConverter x:Key="WindowHandleToCachedIconConverter" />
+        <Color x:Key="ProcessItemFontColor">Black</Color>
+        <Color x:Key="ProcessItemFadeOutColor">Silver</Color>
+        <Color x:Key="ProcessItemClosingColor">Gray</Color>
     </Window.Resources>
 
     <Border Padding="3" Background="White" BorderBrush="DarkGray" BorderThickness="1" Name="Border">
         <DockPanel LastChildFill="True">
             <DockPanel Margin="4,0,4,0" Name="HelpPanel" Background="Transparent" Height="0" DockPanel.Dock="Top">
-                <TextBlock FontSize="10" DockPanel.Dock="Left">
+                <TextBlock FontSize="10" DockPanel.Dock="Left" Name="SearchHelpLabel">
                     type to search
                 </TextBlock>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
-                    <TextBlock FontSize="10" Margin="0,0,8,0">
+                    <TextBlock FontSize="10" Margin="0,0,8,0" Name="NavigationHelpLabel">
                         <TextBlock.ToolTip>
                             <TextBlock>Press <Bold>tab</Bold> or <Bold>↑↓</Bold> to navigate in the list</TextBlock>
                         </TextBlock.ToolTip>
                         <Bold>tab</Bold> or <Bold>↑↓</Bold> to navigate
                     </TextBlock>
-                    <TextBlock FontSize="10" Margin="0,0,8,0">
+                    <TextBlock FontSize="10" Margin="0,0,8,0" Name="FocusWindowHelpLabel">
                         <TextBlock.ToolTip>
                             <TextBlock>Press <Bold>enter</Bold> to open the highlighted window</TextBlock>
                         </TextBlock.ToolTip>
                         <Bold>enter</Bold> to open a window
                     </TextBlock>
-                    <TextBlock FontSize="10" Margin="0,0,8,0">
+                    <TextBlock FontSize="10" Margin="0,0,8,0" Name="CloseWindowHelpLabel">
                         <TextBlock.ToolTip>
                             <TextBlock>Press <Bold>ctrl+w</Bold> to close the highlighted window</TextBlock>
                         </TextBlock.ToolTip>
                         <Bold>ctrl+w</Bold> to close a window
                     </TextBlock>
-                    <TextBlock FontSize="10">
+                    <TextBlock FontSize="10" Name="DismissHelpLabel">
                         <TextBlock.ToolTip>
                             <TextBlock>Press <Bold>esc</Bold> to dismiss the Switcheroo overlay</TextBlock>
                         </TextBlock.ToolTip>
@@ -69,7 +72,7 @@
             </DockPanel>
             <Grid DockPanel.Dock="Top">
                 <TextBox Name="tb" Padding="5" VerticalAlignment="Top" TextChanged="TextChanged" FontSize="15"
-                         VerticalContentAlignment="Center">
+                         VerticalContentAlignment="Center" >
                     <TextBox.InputBindings>
                         <!-- For now, leave these here.  Would it be better to route them upward? -->
                         <KeyBinding Command="local:MainWindow.ScrollListUpCommand" Key="Up" />
@@ -120,11 +123,10 @@
                                 <local:BoolToDoubleConverter x:Key="ImageOpacityConverter"
                                                              IfTrue="{StaticResource FadeOutOpacity}" IfFalse="1.0" />
 
-                                <Color x:Key="FadeOutColor">Silver</Color>
                                 <local:BoolToColorConverter x:Key="TitleColorConverter"
-                                                            IfTrue="{StaticResource FadeOutColor}" IfFalse="Black" />
+                                                            IfTrue="{StaticResource ProcessItemFadeOutColor}" IfFalse="{StaticResource ProcessItemFontColor}" />
                                 <local:BoolToColorConverter x:Key="ProcessColorConverter"
-                                                            IfTrue="{StaticResource FadeOutColor}" IfFalse="Gray" />
+                                                            IfTrue="{StaticResource ProcessItemFadeOutColor}" IfFalse="{StaticResource ProcessItemClosingColor}" />
 
                                 <Style TargetType="{x:Type TextBlock}">
                                     <Style.Triggers>
@@ -134,7 +136,7 @@
                                                     <Storyboard>
                                                         <ColorAnimation Duration="{StaticResource FadeOutDuration}"
                                                                         Storyboard.TargetProperty="(TextBox.Foreground).(SolidColorBrush.Color)"
-                                                                        To="{StaticResource FadeOutColor}" />
+                                                                        To="{StaticResource ProcessItemFadeOutColor}" />
                                                     </Storyboard>
                                                 </BeginStoryboard>
                                             </DataTrigger.EnterActions>

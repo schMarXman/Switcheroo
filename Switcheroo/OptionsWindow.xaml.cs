@@ -18,6 +18,10 @@
  * along with Switcheroo.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Forms;
@@ -33,6 +37,22 @@ namespace Switcheroo
 {
     public partial class OptionsWindow : Window
     {
+        public enum DisplayBehaviour
+        {
+            FollowCursor,
+            PrimaryScreen,
+            CustomScreen
+        }
+
+        public enum ThemeMode
+        {
+            // Light or dark depending on windows settings
+            SystemDefault,
+            DefaultDark,
+            DefaultLight,
+            CustomTheme
+        }
+
         private readonly HotKey _hotkey;
         private HotkeyViewModel _hotkeyViewModel;
 
@@ -41,7 +61,7 @@ namespace Switcheroo
             InitializeComponent();
 
             // Show what's already selected     
-            _hotkey = (HotKey) Application.Current.Properties["hotkey"];
+            _hotkey = (HotKey)Application.Current.Properties["hotkey"];
 
             try
             {
@@ -53,7 +73,7 @@ namespace Switcheroo
 
             _hotkeyViewModel = new HotkeyViewModel
             {
-                KeyCode = KeyInterop.KeyFromVirtualKey((int) _hotkey.KeyCode),
+                KeyCode = KeyInterop.KeyFromVirtualKey((int)_hotkey.KeyCode),
                 Alt = _hotkey.Alt,
                 Ctrl = _hotkey.Ctrl,
                 Windows = _hotkey.WindowsKey,
@@ -67,6 +87,79 @@ namespace Switcheroo
             AutoSwitch.IsChecked = Settings.Default.AutoSwitch;
             AutoSwitch.IsEnabled = Settings.Default.AltTabHook;
             RunAsAdministrator.IsChecked = Settings.Default.RunAsAdmin;
+
+            SetupThemeDropdown();
+
+            SetupDisplayBehaviourDropdown();
+        }
+
+        private void SetupThemeDropdown()
+        {
+            // Tuple: Text to display, enum, custom theme name
+            var themes = new List<Tuple<string, ThemeMode, string>>()
+            {
+              new Tuple<string, ThemeMode, string>( "System default", ThemeMode.SystemDefault, ""),
+              new Tuple<string, ThemeMode, string>( "Light",ThemeMode.DefaultLight, ""),
+              new Tuple<string, ThemeMode, string>( "Dark", ThemeMode.DefaultDark,"")
+            };
+
+            // load theme files
+            var themesDirectory = Directory.CreateDirectory(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Themes"));
+            var themeFiles = Directory.GetFiles(themesDirectory.FullName, "*.stheme");//.Select(x => Path.GetFileNameWithoutExtension(x));
+            foreach (var file in themeFiles)
+            {
+                var filename = Path.GetFileNameWithoutExtension(file);
+                if (!themes.Any(x => x.Item1.Equals(filename, StringComparison.OrdinalIgnoreCase)))
+                {
+                    themes.Add(new Tuple<string, ThemeMode, string>(filename, ThemeMode.CustomTheme, Path.GetFileName(file)));
+                }
+            }
+
+            var themeSetting = (ThemeMode)Enum.Parse(typeof(ThemeMode), Settings.Default.ThemeMode, true);
+
+            ThemeDropdown.ItemsSource = themes;
+            int index;
+            if (themeSetting == ThemeMode.CustomTheme)
+            {
+                index = themes.FindIndex(x => x.Item3.Equals(Settings.Default.CustomTheme, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                index = themes.FindIndex(x => x.Item2 == themeSetting);
+            }
+            ThemeDropdown.SelectedIndex = index < 0 ? 0 : index;
+        }
+
+        private void SetupDisplayBehaviourDropdown()
+        {
+            // Tuple: Text to display, enum, screen index
+            var settings = new List<Tuple<string, DisplayBehaviour, int>>()
+            {
+                new Tuple<string, DisplayBehaviour, int>("Follow cursor", DisplayBehaviour.FollowCursor, -1),
+                new Tuple<string, DisplayBehaviour, int>("Always on primary screen", DisplayBehaviour.PrimaryScreen, -1)
+            };
+
+            if (Screen.AllScreens.Length > 1)
+            {
+                for (int i = 0; i < Screen.AllScreens.Length; i++)
+                {
+                    settings.Add(new Tuple<string, DisplayBehaviour, int>("Always on screen " + (i + 1), DisplayBehaviour.CustomScreen, i));
+                }
+            }
+
+            var behaviourSetting = (DisplayBehaviour)Enum.Parse(typeof(DisplayBehaviour), Settings.Default.DisplayBehaviour, true);
+
+            BehaviourDropdown.ItemsSource = settings;
+            int index;
+            if (behaviourSetting == DisplayBehaviour.CustomScreen)
+            {
+                index = settings.FindIndex(x => x.Item3 == Settings.Default.ScreenIndex);
+            }
+            else
+            {
+                index = settings.FindIndex(x => x.Item2 == behaviourSetting);
+            }
+            BehaviourDropdown.SelectedIndex = index < 0 ? 0 : index;
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
@@ -89,7 +182,7 @@ namespace Switcheroo
                     _hotkey.Shift = _hotkeyViewModel.Shift;
                     _hotkey.Ctrl = _hotkeyViewModel.Ctrl;
                     _hotkey.WindowsKey = _hotkeyViewModel.Windows;
-                    _hotkey.KeyCode = (Keys) KeyInterop.VirtualKeyFromKey(_hotkeyViewModel.KeyCode);
+                    _hotkey.KeyCode = (Keys)KeyInterop.VirtualKeyFromKey(_hotkeyViewModel.KeyCode);
                     _hotkey.Enabled = true;
                 }
 
@@ -107,6 +200,15 @@ namespace Switcheroo
             Settings.Default.AltTabHook = AltTabCheckBox.IsChecked.GetValueOrDefault();
             Settings.Default.AutoSwitch = AutoSwitch.IsChecked.GetValueOrDefault();
             Settings.Default.RunAsAdmin = RunAsAdministrator.IsChecked.GetValueOrDefault();
+
+            var themeSetting = (Tuple<string, ThemeMode, string>)ThemeDropdown.SelectedItem;
+            Settings.Default.ThemeMode = themeSetting.Item2.ToString();
+            Settings.Default.CustomTheme = themeSetting.Item3.ToString();
+
+            var behaviourSetting = (Tuple<string, DisplayBehaviour, int>)BehaviourDropdown.SelectedItem;
+            Settings.Default.DisplayBehaviour = behaviourSetting.Item2.ToString();
+            Settings.Default.ScreenIndex = behaviourSetting.Item3;
+
             Settings.Default.Save();
 
             if (closeOptionsWindow)
@@ -147,7 +249,7 @@ namespace Switcheroo
             // Jump to the next element if the user presses only the Tab key
             if (previewText == "Tab")
             {
-                ((UIElement) sender).MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+                ((UIElement)sender).MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
                 return;
             }
 
@@ -188,7 +290,7 @@ namespace Switcheroo
                 }
 
                 var keyString =
-                    KeyboardHelper.CodeToString((uint) KeyInterop.VirtualKeyFromKey(KeyCode)).ToUpper().Trim();
+                    KeyboardHelper.CodeToString((uint)KeyInterop.VirtualKeyFromKey(KeyCode)).ToUpper().Trim();
                 if (keyString.Length == 0)
                 {
                     keyString = new KeysConverter().ConvertToString(KeyCode);
